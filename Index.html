@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mapeo de Artículos en Tienda (Testing + Excel)</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: { 50: '#eef2ff', 100: '#e0e7ff', 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca' },
+                        comp: { 50: '#f8fafc', 100: '#f1f5f9', 500: '#64748b', 600: '#475569', 700: '#334155' }
+                    }
+                }
+            }
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- React & ReactDOM -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- SheetJS (Para Exportar a Excel real .xlsx) -->
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+
+    <!-- Importmap para Firebase -->
+    <script type="importmap">
+      {
+        "imports": {
+          "firebase/app": "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js",
+          "firebase/firestore": "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js"
+        }
+      }
+    </script>
+
+    <style>
+        ::-webkit-scrollbar { height: 8px; width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 antialiased min-h-screen">
+    <div id="root"></div>
+
+    <script type="text/babel" data-type="module">
+        import { initializeApp } from 'firebase/app';
+        import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc, serverTimestamp, updateDoc } from 'firebase/firestore';
+
+        const { useState, useEffect } = React;
+
+        // --- CONFIGURACIÓN FIREBASE ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyAZzGCXeUtj4pM3IMYB5RR0XKj3wh6lctI",
+            authDomain: "plankhn.firebaseapp.com",
+            projectId: "plankhn",
+            storageBucket: "plankhn.firebasestorage.app",
+            messagingSenderId: "500734544493",
+            appId: "1:500734544493:web:855c2e097a45ac33afcd64"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // --- ICONOS SVG ---
+        const IconTrash = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg>;
+        const IconSave = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>;
+        const IconStore = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-brand-600"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>;
+        const IconCheck = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>;
+        const IconAlert = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>;
+        const IconTag = () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg>;
+        const IconBack = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>;
+        const IconExcel = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="8" y1="13" x2="16" y2="13"></line><line x1="8" y1="17" x2="16" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>;
+        const IconHistory = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-emerald-600"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>;
+
+        // --- COMPONENTE PRINCIPAL APP ---
+        function App() {
+            // Estado de Visita, Artículos e Historial
+            const [currentVisit, setCurrentVisit] = useState(null);
+            const [articles, setArticles] = useState([]);
+            
+            const [allHistoricalArticles, setAllHistoricalArticles] = useState([]);
+            const [allHistoricalVisits, setAllHistoricalVisits] = useState([]);
+            
+            // Estado para el Modal de Resumen
+            const [showSummary, setShowSummary] = useState(false);
+            
+            // Listas predictivas (Autocompletado)
+            const [marcasSugeridas, setMarcasSugeridas] = useState([]);
+            const [productosSugeridos, setProductosSugeridos] = useState([]);
+
+            // Estado del Formulario
+            const [tiendaInput, setTiendaInput] = useState('');
+            const [formData, setFormData] = useState({
+                esMiMarca: true,
+                marca: '',
+                producto: '',
+                modelo: '',
+                tamano: '',
+                unidad: 'pulg',
+                precio: '',
+                precioOferta: ''
+            });
+
+            const [toasts, setToasts] = useState([]);
+
+            // Cargar Artículos Globales (Firebase)
+            useEffect(() => {
+                const artsRef = collection(db, "articulos");
+                const unsubscribe = onSnapshot(artsRef, (snapshot) => {
+                    const allArts = [];
+                    const marcas = new Set();
+                    const prods = new Set();
+                    
+                    snapshot.forEach((doc) => {
+                        const data = doc.data();
+                        allArts.push({ id: doc.id, ...data });
+                        if (data.marca) marcas.add(data.marca);
+                        if (data.producto) prods.add(data.producto);
+                    });
+                    
+                    setAllHistoricalArticles(allArts);
+                    setMarcasSugeridas([...marcas].sort());
+                    setProductosSugeridos([...prods].sort());
+
+                    if (currentVisit) {
+                        const currentVisitArts = allArts.filter(a => a.visitaId === currentVisit.id);
+                        currentVisitArts.sort((a, b) => (b.timestamp?.toMillis() || 0) - (a.timestamp?.toMillis() || 0));
+                        setArticles(currentVisitArts);
+                    }
+                });
+                return () => unsubscribe();
+            }, [currentVisit]);
+
+            // Cargar Historial de Visitas Globales (Firebase)
+            useEffect(() => {
+                const visitsRef = collection(db, "visitas");
+                const unsubscribe = onSnapshot(visitsRef, (snapshot) => {
+                    const visits = [];
+                    snapshot.forEach((doc) => {
+                        visits.push({ id: doc.id, ...doc.data() });
+                    });
+                    // Ordenar más recientes primero
+                    visits.sort((a, b) => (b.timestamp?.toMillis() || 0) - (a.timestamp?.toMillis() || 0));
+                    setAllHistoricalVisits(visits);
+                });
+                return () => unsubscribe();
+            }, []);
+
+            // Exportación a Excel (Reportes)
+            const exportToExcel = (visitaId = null) => {
+                let dataToExport = allHistoricalArticles;
+                let fileName = "Reporte_General_Mapeo.xlsx";
+
+                if (visitaId) {
+                    dataToExport = allHistoricalArticles.filter(a => a.visitaId === visitaId);
+                    const visitData = allHistoricalVisits.find(v => v.id === visitaId);
+                    fileName = `Reporte_${visitData ? visitData.tienda.replace(/\s+/g, '_') : 'Visita'}.xlsx`;
+                }
+
+                if (dataToExport.length === 0) {
+                    addToast('No hay artículos registrados para exportar.', 'error');
+                    return;
+                }
+
+                // Transformar datos para que Excel se vea limpio
+                const excelData = dataToExport.map(item => ({
+                    'Fecha de Captura': item.fecha || '-',
+                    'Punto de Venta': item.tienda || '-',
+                    'Propietario': item.esMiMarca ? 'Mi Marca' : 'Competencia',
+                    'Marca': item.marca || '-',
+                    'Producto': item.producto || '-',
+                    'Modelo': item.modelo || '-',
+                    'Tamaño': item.tamano || '-',
+                    'Unidad de Medida': item.unidad !== 'N/A' ? item.unidad : '-',
+                    'Precio Regular (HNL)': item.precio || '-',
+                    'Precio Oferta (HNL)': item.precioOferta || '-'
+                }));
+
+                try {
+                    const worksheet = XLSX.utils.json_to_sheet(excelData);
+                    const workbook = XLSX.utils.book_new();
+                    XLSX.utils.book_append_sheet(workbook, worksheet, "Inventario Mapeado");
+                    XLSX.writeFile(workbook, fileName);
+                    addToast(`Archivo ${fileName} descargado con éxito.`, 'success');
+                } catch (error) {
+                    console.error(error);
+                    addToast('Ocurrió un error al generar el archivo de Excel.', 'error');
+                }
+            };
+
+            // Sistema de Notificaciones
+            const addToast = (message, type = 'success') => {
+                const id = Date.now();
+                setToasts(prev => [...prev, { id, message, type }]);
+                setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000);
+            };
+
+            // Crear una nueva Visita
+            const handleCreateVisit = async (e) => {
+                e.preventDefault();
+                if (!tiendaInput.trim()) {
+                    addToast('Ingresa el nombre de la tienda', 'error');
+                    return;
+                }
+                try {
+                    const visitRef = await addDoc(collection(db, "visitas"), {
+                        tienda: tiendaInput,
+                        fecha: new Date().toLocaleDateString('es-ES'),
+                        estado: 'en_progreso',
+                        timestamp: serverTimestamp(),
+                        testMode: true
+                    });
+                    setCurrentVisit({ id: visitRef.id, tienda: tiendaInput });
+                    setTiendaInput('');
+                    addToast('Visita iniciada. Ya puedes registrar.', 'success');
+                } catch (error) {
+                    console.error(error);
+                    addToast('Error al crear visita', 'error');
+                }
+            };
+
+            // Inputs del Formulario de Artículo
+            const handleInputChange = (e) => {
+                const { name, value, type, checked } = e.target;
+                setFormData(prev => ({ 
+                    ...prev, 
+                    [name]: type === 'checkbox' ? checked : value 
+                }));
+            };
+
+            // Guardar Artículo
+            const handleSaveArticle = async (e) => {
+                e.preventDefault();
+                if (!formData.marca.trim() || !formData.producto.trim() || !formData.modelo.trim()) {
+                    addToast('Marca, Producto y Modelo son obligatorios.', 'error');
+                    return;
+                }
+                try {
+                    await addDoc(collection(db, "articulos"), {
+                        visitaId: currentVisit.id,
+                        tienda: currentVisit.tienda,
+                        fecha: new Date().toLocaleDateString('es-ES'),
+                        ...formData,
+                        timestamp: serverTimestamp(),
+                        testMode: true
+                    });
+                    setFormData(prev => ({
+                        ...prev, marca: '', producto: '', modelo: '', tamano: '', precio: '', precioOferta: ''
+                    }));
+                    addToast('Artículo guardado con éxito.', 'success');
+                } catch (error) {
+                    console.error(error);
+                    addToast('Error al guardar en Firebase.', 'error');
+                }
+            };
+
+            const handleDelete = async (id) => {
+                if (window.confirm('¿Eliminar este registro?')) {
+                    try {
+                        await deleteDoc(doc(db, "articulos", id));
+                        addToast('Registro eliminado.', 'info');
+                    } catch (error) { addToast('Error al eliminar.', 'error'); }
+                }
+            };
+
+            // Confirmar y Guardar Visita Final (Modal)
+            const handleConfirmFinish = async () => {
+                try {
+                    await updateDoc(doc(db, "visitas", currentVisit.id), {
+                        estado: 'completada',
+                        totalArticulos: articles.length
+                    });
+                    setShowSummary(false);
+                    setCurrentVisit(null);
+                    addToast('Visita guardada y finalizada correctamente.', 'success');
+                } catch (error) {
+                    console.error(error);
+                    addToast('Error al guardar la visita final.', 'error');
+                }
+            };
+
+            // Eliminar Visita completa del historial
+            const handleDeleteVisit = async (id) => {
+                if (window.confirm('¿Estás seguro de eliminar todo el registro de esta visita?')) {
+                    try {
+                        await deleteDoc(doc(db, "visitas", id));
+                        addToast('Visita eliminada del historial.', 'info');
+                    } catch (error) { addToast('Error al eliminar visita.', 'error'); }
+                }
+            };
+
+            const formatPrice = (price) => {
+                if (!price) return '-';
+                return new Intl.NumberFormat('es-HN', { style: 'currency', currency: 'HNL' }).format(price);
+            };
+
+            return (
+                <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
+                    {/* ENCABEZADO GLOBAL */}
+                    <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-6">
+                        <div className="flex items-center gap-4">
+                            <div className="bg-brand-100 p-3 rounded-2xl shadow-sm text-brand-600">
+                                <IconStore />
+                            </div>
+                            <div>
+                                <h1 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Registro en Tienda</h1>
+                                <span className="inline-block mt-1 bg-amber-100 text-amber-700 text-xs font-bold px-2 py-1 rounded-md uppercase tracking-wider">
+                                    Modo Pruebas (Sin Sesión)
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* --- PANTALLA 1: DASHBOARD INICIAL (NUEVA VISITA + HISTORIAL) --- */}
+                    {!currentVisit && (
+                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+                            
+                            {/* NUEVA VISITA */}
+                            <div className="lg:col-span-4 bg-white rounded-3xl shadow-lg shadow-slate-200/50 border border-slate-100 p-6 sm:p-8 text-center sticky top-8">
+                                <h2 className="text-xl font-bold text-slate-800 mb-2">Nueva Visita</h2>
+                                <p className="text-slate-500 text-sm mb-6">Ingresa el nombre del supermercado o tienda para comenzar a registrar.</p>
+                                
+                                <form onSubmit={handleCreateVisit}>
+                                    <input 
+                                        type="text" 
+                                        value={tiendaInput} 
+                                        onChange={(e) => setTiendaInput(e.target.value)}
+                                        className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3.5 focus:border-brand-500 focus:bg-white focus:ring-4 focus:ring-brand-500/10 outline-none transition-all text-center text-lg font-medium text-slate-700 mb-4"
+                                        placeholder="Ej. Walmart Supercenter"
+                                        autoFocus
+                                    />
+                                    <button type="submit" className="w-full bg-brand-600 hover:bg-brand-700 text-white font-medium py-3.5 px-4 rounded-xl shadow-lg shadow-brand-600/30 transition-all flex justify-center items-center gap-2">
+                                        <IconStore /> Iniciar Mapeo
+                                    </button>
+                                </form>
+                            </div>
+
+                            {/* HISTORIAL Y REPORTES EXCEL */}
+                            <div className="lg:col-span-8 bg-white rounded-3xl shadow-lg shadow-slate-200/50 border border-slate-100 overflow-hidden flex flex-col min-h-[500px]">
+                                <div className="p-6 sm:p-8 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between bg-white gap-4">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2 bg-emerald-50 rounded-xl">
+                                            <IconHistory />
+                                        </div>
+                                        <div>
+                                            <h2 className="text-lg font-bold text-slate-800">Historial de Visitas</h2>
+                                            <p className="text-sm text-slate-500">{allHistoricalVisits.length} visitas registradas</p>
+                                        </div>
+                                    </div>
+                                    <button 
+                                        onClick={() => exportToExcel(null)}
+                                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-2.5 px-5 rounded-xl shadow-lg shadow-emerald-600/30 transition-all flex items-center justify-center gap-2 text-sm whitespace-nowrap"
+                                    >
+                                        <IconExcel /> Descargar Reporte Global
+                                    </button>
+                                </div>
+                                
+                                <div className="flex-1 overflow-x-auto p-4 sm:p-6">
+                                    {allHistoricalVisits.length === 0 ? (
+                                        <div className="flex flex-col items-center justify-center h-full p-8 text-center text-slate-400">
+                                            Aún no tienes visitas registradas en el historial.
+                                        </div>
+                                    ) : (
+                                        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
+                                            {allHistoricalVisits.map(visit => {
+                                                const articleCount = allHistoricalArticles.filter(a => a.visitaId === visit.id).length;
+                                                return (
+                                                    <div key={visit.id} className="border border-slate-200 rounded-2xl p-5 hover:border-emerald-300 hover:shadow-md transition-all group bg-slate-50/50">
+                                                        <div className="flex justify-between items-start mb-3">
+                                                            <div>
+                                                                <h3 className="font-bold text-slate-800 text-base">{visit.tienda}</h3>
+                                                                <p className="text-xs text-slate-500 mt-1 flex items-center gap-1">
+                                                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                                                                    {visit.fecha}
+                                                                </p>
+                                                            </div>
+                                                            <span className="bg-white border border-slate-200 text-slate-600 text-xs font-bold px-2.5 py-1 rounded-lg">
+                                                                {articleCount} art.
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex gap-2 mt-4 pt-4 border-t border-slate-200/60">
+                                                            <button 
+                                                                onClick={() => exportToExcel(visit.id)}
+                                                                className="flex-1 bg-white hover:bg-emerald-50 text-emerald-700 border border-emerald-200 font-medium py-2 px-3 rounded-xl transition-colors flex items-center justify-center gap-1.5 text-xs"
+                                                            >
+                                                                <IconExcel /> Excel
+                                                            </button>
+                                                            <button 
+                                                                onClick={() => handleDeleteVisit(visit.id)}
+                                                                className="bg-white hover:bg-red-50 text-slate-400 hover:text-red-600 border border-slate-200 font-medium py-2 px-3 rounded-xl transition-colors flex items-center justify-center text-xs"
+                                                                title="Borrar Visita"
+                                                            >
+                                                                <IconTrash />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* --- PANTALLA 2: VISITA ACTIVA (FORMULARIO Y TABLA) --- */}
+                    {currentVisit && (
+                        <div>
+                            {/* Barra de estado de visita */}
+                            <div className="flex items-center justify-between bg-slate-800 text-white p-4 rounded-2xl mb-8 shadow-lg">
+                                <div className="flex items-center gap-3">
+                                    <span className="bg-white/20 p-2 rounded-lg"><IconStore /></span>
+                                    <div>
+                                        <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Visita Activa</p>
+                                        <p className="text-lg font-bold">{currentVisit.tienda}</p>
+                                    </div>
+                                </div>
+                                <button onClick={() => setShowSummary(true)} className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 px-5 py-2.5 rounded-xl text-sm font-medium transition-colors shadow-lg shadow-emerald-500/30">
+                                    <IconCheck /> Finalizar Visita
+                                </button>
+                            </div>
+
+                            {/* Datalists para Autocompletado */}
+                            <datalist id="marcasList">{marcasSugeridas.map((m, i) => <option key={`marca-${i}`} value={m} />)}</datalist>
+                            <datalist id="productosList">{productosSugeridos.map((p, i) => <option key={`prod-${i}`} value={p} />)}</datalist>
+
+                            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+                                {/* FORMULARIO DE ARTÍCULO */}
+                                <div className="lg:col-span-4 bg-white rounded-3xl shadow-lg shadow-slate-200/50 border border-slate-100 p-6 sm:p-8">
+                                    <div className="flex justify-between items-center mb-6">
+                                        <h2 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
+                                            <span className="w-1.5 h-6 bg-brand-500 rounded-full inline-block"></span>
+                                            Nuevo Artículo
+                                        </h2>
+                                    </div>
+                                    
+                                    <form onSubmit={handleSaveArticle} className="space-y-5">
+                                        {/* Toggle Mi Marca / Competencia */}
+                                        <div className="flex items-center justify-between bg-slate-50 p-3 rounded-xl border border-slate-200">
+                                            <span className="text-sm font-medium text-slate-700">¿De quién es el artículo?</span>
+                                            <label className="relative inline-flex items-center cursor-pointer">
+                                                <input type="checkbox" name="esMiMarca" checked={formData.esMiMarca} onChange={handleInputChange} className="sr-only peer" />
+                                                <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-600"></div>
+                                                <span className={`ml-3 text-sm font-bold ${formData.esMiMarca ? 'text-brand-600' : 'text-slate-500'}`}>
+                                                    {formData.esMiMarca ? 'Mi Marca' : 'Competencia'}
+                                                </span>
+                                            </label>
+                                        </div>
+
+                                        {/* Marca */}
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-700 mb-1">Marca <span className="text-red-500">*</span></label>
+                                            <input list="marcasList" type="text" name="marca" value={formData.marca} onChange={handleInputChange} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 outline-none transition-all" placeholder="Ej. GRS, Samsung..." autoComplete="off"/>
+                                        </div>
+
+                                        {/* Producto */}
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-700 mb-1">Producto <span className="text-red-500">*</span></label>
+                                            <input list="productosList" type="text" name="producto" value={formData.producto} onChange={handleInputChange} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 outline-none transition-all" placeholder="Ej. Refrigeradora, Estufa..." autoComplete="off"/>
+                                        </div>
+
+                                        {/* Modelo */}
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-700 mb-1">Modelo <span className="text-red-500">*</span></label>
+                                            <input type="text" name="modelo" value={formData.modelo} onChange={handleInputChange} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 outline-none transition-all" placeholder="Ej. RF-5000"/>
+                                        </div>
+
+                                        {/* TAMAÑO Y UNIDAD */}
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-sm font-medium text-slate-700 mb-1">Tamaño</label>
+                                                <input type="number" inputMode="decimal" step="0.01" name="tamano" value={formData.tamano} onChange={handleInputChange} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 outline-none transition-all" placeholder="Ej. 32"/>
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-slate-700 mb-1">Unidad</label>
+                                                <select name="unidad" value={formData.unidad} onChange={handleInputChange} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 outline-none transition-all text-slate-700">
+                                                    <option value="pulg">Pulgadas (")</option><option value="pies">Pies (ft)</option><option value="m">Metros (m)</option><option value="cm">Centímetros (cm)</option><option value="L">Litros (L)</option><option value="oz">Onzas (oz)</option><option value="lb">Libras (lb)</option><option value="kg">Kilos (kg)</option><option value="N/A">N/A</option>
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        {/* Precios */}
+                                        <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-100">
+                                            <div>
+                                                <label className="block text-sm font-medium text-slate-700 mb-1">Precio Reg.</label>
+                                                <div className="relative">
+                                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">$</span>
+                                                    <input type="number" step="0.01" inputMode="decimal" name="precio" value={formData.precio} onChange={handleInputChange} className="w-full rounded-xl border border-slate-200 bg-white pl-8 pr-4 py-2.5 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 outline-none transition-all font-medium text-slate-700" placeholder="0.00"/>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-bold text-emerald-600 mb-1">Oferta</label>
+                                                <div className="relative">
+                                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-400">$</span>
+                                                    <input type="number" step="0.01" inputMode="decimal" name="precioOferta" value={formData.precioOferta} onChange={handleInputChange} className="w-full rounded-xl border border-emerald-200 bg-emerald-50 pl-8 pr-4 py-2.5 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/20 outline-none transition-all font-bold text-emerald-700" placeholder="Opcional"/>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="pt-4">
+                                            <button type="submit" className="w-full bg-slate-800 hover:bg-slate-900 text-white font-medium py-3.5 px-4 rounded-xl shadow-lg shadow-slate-800/20 transition-all flex items-center justify-center gap-2 transform active:scale-[0.98]">
+                                                <IconSave /> Guardar y Continuar
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+
+                                {/* TABLA DE ARTÍCULOS */}
+                                <div className="lg:col-span-8 bg-white rounded-3xl shadow-lg shadow-slate-200/50 border border-slate-100 overflow-hidden flex flex-col h-full min-h-[500px]">
+                                    <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white">
+                                        <h2 className="text-lg font-semibold text-slate-800">Registrados en esta visita</h2>
+                                        <span className="bg-slate-100 text-slate-600 text-xs font-semibold px-3 py-1 rounded-full">
+                                            {articles.length} {articles.length === 1 ? 'artículo' : 'artículos'}
+                                        </span>
+                                    </div>
+                                    
+                                    <div className="flex-1 overflow-x-auto">
+                                        {articles.length === 0 ? (
+                                            <div className="flex flex-col items-center justify-center h-full p-12 text-center">
+                                                <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
+                                                    <svg className="w-8 h-8 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+                                                </div>
+                                                <h3 className="text-lg font-medium text-slate-800 mb-1">Visita iniciada</h3>
+                                                <p className="text-slate-500 text-sm max-w-sm">Registra tu primer artículo de prueba en el formulario de la izquierda.</p>
+                                            </div>
+                                        ) : (
+                                            <table className="w-full text-left border-collapse min-w-[700px]">
+                                                <thead>
+                                                    <tr className="bg-slate-50 border-b border-slate-200">
+                                                        <th className="py-3 px-5 text-xs font-bold text-slate-500 uppercase">Marca / Tipo</th>
+                                                        <th className="py-3 px-5 text-xs font-bold text-slate-500 uppercase">Detalle del Producto</th>
+                                                        <th className="py-3 px-5 text-xs font-bold text-slate-500 uppercase">Precios</th>
+                                                        <th className="py-3 px-5 text-xs font-bold text-slate-500 uppercase text-right"></th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-slate-100">
+                                                    {articles.map((row) => (
+                                                        <tr key={row.id} className={`transition-colors hover:bg-slate-50 ${row.esMiMarca ? 'bg-brand-50/20' : ''}`}>
+                                                            <td className="py-4 px-5">
+                                                                <div className="flex items-center gap-2">
+                                                                    {row.esMiMarca ? <span className="bg-brand-100 text-brand-700 text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider">Mi Marca</span> : <span className="bg-slate-200 text-slate-600 text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider">Comp.</span>}
+                                                                </div>
+                                                                <p className="font-bold text-slate-800 mt-1">{row.marca}</p>
+                                                            </td>
+                                                            <td className="py-4 px-5">
+                                                                <p className="font-medium text-slate-800 text-sm">{row.producto}</p>
+                                                                <p className="text-sm text-slate-500 mt-0.5">Mod: {row.modelo} {row.tamano && ` | Tam: ${row.tamano} ${row.unidad !== 'N/A' ? row.unidad : ''}`}</p>
+                                                            </td>
+                                                            <td className="py-4 px-5">
+                                                                <div className="flex flex-col gap-1">
+                                                                    {row.precioOferta ? (
+                                                                        <>
+                                                                            <span className="text-sm text-slate-400 line-through decoration-slate-400">{formatPrice(row.precio)}</span>
+                                                                            <span className="flex items-center text-sm font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded w-fit"><IconTag /> {formatPrice(row.precioOferta)}</span>
+                                                                        </>
+                                                                    ) : (
+                                                                        <span className="text-sm font-bold text-slate-800 bg-slate-100 px-2 py-1 rounded w-fit">{formatPrice(row.precio)}</span>
+                                                                    )}
+                                                                </div>
+                                                            </td>
+                                                            <td className="py-4 px-5 text-right">
+                                                                <button onClick={() => handleDelete(row.id)} className="text-slate-400 hover:text-red-500 hover:bg-red-50 p-2 rounded-lg transition-all inline-flex" title="Borrar artículo"><IconTrash /></button>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* --- MODAL DE RESUMEN DE VISITA --- */}
+                    {showSummary && (
+                        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+                            <div className="bg-white rounded-3xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-[slideIn_0.2s_ease-out]">
+                                <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                                    <div>
+                                        <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2"><IconStore /> Resumen de Captura</h2>
+                                        <p className="text-sm text-slate-500 mt-1">{currentVisit.tienda} - {articles.length} artículos listos</p>
+                                    </div>
+                                    <button onClick={() => setShowSummary(false)} className="text-slate-400 hover:text-slate-600 p-2 bg-white rounded-full shadow-sm">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                    </button>
+                                </div>
+                                <div className="flex-1 overflow-auto p-6">
+                                    <table className="w-full text-left border-collapse min-w-[600px]">
+                                        <thead>
+                                            <tr className="bg-slate-50 border-b border-slate-200">
+                                                <th className="py-3 px-4 text-xs font-bold text-slate-500 uppercase">Marca</th>
+                                                <th className="py-3 px-4 text-xs font-bold text-slate-500 uppercase">Producto / Modelo</th>
+                                                <th className="py-3 px-4 text-xs font-bold text-slate-500 uppercase">Precio Reg.</th>
+                                                <th className="py-3 px-4 text-xs font-bold text-slate-500 uppercase">Oferta</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100">
+                                            {articles.map((row) => (
+                                                <tr key={`sum-${row.id}`} className="hover:bg-slate-50">
+                                                    <td className="py-3 px-4">
+                                                        <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider mb-1 ${row.esMiMarca ? 'bg-brand-100 text-brand-700' : 'bg-slate-200 text-slate-600'}`}>
+                                                            {row.esMiMarca ? 'Mi Marca' : 'Comp.'}
+                                                        </span>
+                                                        <p className="font-bold text-slate-800 text-sm">{row.marca}</p>
+                                                    </td>
+                                                    <td className="py-3 px-4">
+                                                        <p className="font-medium text-slate-800 text-sm">{row.producto}</p>
+                                                        <p className="text-xs text-slate-500">Mod: {row.modelo}</p>
+                                                    </td>
+                                                    <td className="py-3 px-4 text-sm font-medium text-slate-700">{formatPrice(row.precio)}</td>
+                                                    <td className="py-3 px-4 text-sm font-bold text-emerald-600">{row.precioOferta ? formatPrice(row.precioOferta) : '-'}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
+                                    <button onClick={() => setShowSummary(false)} className="px-5 py-2.5 rounded-xl font-medium text-slate-600 hover:bg-slate-200 transition-colors">
+                                        Volver a editar
+                                    </button>
+                                    <button onClick={handleConfirmFinish} className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-2.5 px-6 rounded-xl shadow-lg shadow-emerald-600/30 transition-all flex items-center gap-2">
+                                        <IconSave /> Guardar y Salir
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* TOASTS (Notificaciones) */}
+                    <div className="fixed bottom-4 right-4 sm:bottom-8 sm:right-8 z-50 flex flex-col gap-3">
+                        {toasts.map(toast => (
+                            <div key={toast.id} className={`flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl shadow-slate-200/50 border bg-white animate-[slideIn_0.3s_ease-out]
+                                ${toast.type === 'success' ? 'border-emerald-100' : toast.type === 'error' ? 'border-red-100' : 'border-blue-100'}`}>
+                                <div className={`shrink-0 p-1 rounded-full ${toast.type === 'success' ? 'bg-emerald-50' : toast.type === 'error' ? 'bg-red-50' : 'bg-blue-50'}`}>
+                                    {toast.type === 'success' && <IconCheck />}
+                                    {toast.type === 'error' && <IconAlert />}
+                                </div>
+                                <p className="text-sm font-medium text-slate-700">{toast.message}</p>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+    
+    <style>
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(20px) scale(0.95); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+    </style>
+</body>
+</html>
+
