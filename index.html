@@ -175,6 +175,16 @@
                     return;
                 }
 
+                // Calcula la diferencia entre precio oferta y regular (con signo + o -)
+                const calcularDiferencia = (item) => {
+                    const reg = parseFloat(item.precio);
+                    const ofe = parseFloat(item.precioOferta);
+                    if (isNaN(reg) || isNaN(ofe)) return '-';
+                    const dif = ofe - reg;
+                    if (dif === 0) return '0.00';
+                    return `${dif > 0 ? '+' : '-'}${Math.abs(dif).toFixed(2)}`;
+                };
+
                 // Transformar datos para que Excel se vea limpio
                 const excelData = dataToExport.map(item => ({
                     'Fecha de Captura': item.fecha || '-',
@@ -186,7 +196,8 @@
                     'Tamaño': item.tamano || '-',
                     'Unidad de Medida': item.unidad !== 'N/A' ? item.unidad : '-',
                     'Precio Regular (HNL)': item.precio || '-',
-                    'Precio Oferta (HNL)': item.precioOferta || '-'
+                    'Precio Oferta (HNL)': item.precioOferta || '-',
+                    'Diferencia (HNL)': calcularDiferencia(item)
                 }));
 
                 try {
